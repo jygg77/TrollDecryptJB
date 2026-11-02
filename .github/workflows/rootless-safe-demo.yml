@@ -25,8 +25,8 @@ jobs:
           cd "$THEOS/sdks"
           wget -q https://github.com/theos/sdks/archive/master.zip -O sdks.zip
           unzip -q sdks.zip
-          mv theos-sdks-master/*.sdk "$THEOS/sdks/"
-          rm -rf theos-sdks-master sdks.zip
+          mv sdks-master/*.sdk "$THEOS/sdks/"
+          rm -rf sdks-master sdks.zip
           echo "THEOS=$THEOS" >> $GITHUB_ENV
 
       - name: Create SafeDemo project
