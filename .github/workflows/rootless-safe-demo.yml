@@ -1,0 +1,215 @@
+name: rootless-safe-demo
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Rootless UIKit Demo Build
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Theos and dependencies
+        run: |
+          brew install ldid make
+          PATH="$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          mkdir -p "$THEOS/sdks"
+          cd "$THEOS/sdks"
+          wget -q https://github.com/theos/sdks/archive/master.zip -O sdks.zip
+          unzip -q sdks.zip
+          mv theos-sdks-master/*.sdk "$THEOS/sdks/"
+          rm -rf theos-sdks-master sdks.zip
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+
+      - name: Create SafeDemo project
+        run: |
+          mkdir -p SafeDemo
+
+          cat > SafeDemo/Makefile | tee SafeDemo/Makefile
+          TARGET iphone:clang:latest:15.0
+          ARCHS = arm64 arm64e
+          THEOS_PACKAGE_SCHEME = rootless
+          APPLICATION_NAME = TrollDecryptAuditDemo
+          TrollDecryptAuditDemo_INSTALL_PATH = /Applications
+          TrollDecryptAuditDemo_FILES = main.m AppDelegate.m ViewController.m
+          TrollDecryptAuditDemo_FRAMEWORKS = UIKit Foundation
+          TrollDecryptAuditDemo_INFO_PLIST = Info.plist
+
+          EOF
+
+          cat > SafeDemo/main.m | tee SafeDemo/main.m
+          #import "AppDelegate.h"
+          #import "ViewController.h"
+          @import UIKit;
+          int main(int argc, char * argv[]) {
+            @autoreleasepool {
+              return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
+            }
+          }
+
+          EOF
+
+          cat > SafeDemo/AppDelegate.m | tee SafeDemo/AppDelegate.m
+          #import "AppDelegate.h"
+          #import "ViewController.h"
+          @implementation AppDelegate
+          - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+            self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+            self.window.rootViewController = [[ViewController alloc] init];
+            [self.window makeKeyAndVisible];
+            return YES;
+          }
+          @end
+
+          EOF
+
+          cat > SafeDemo/ViewController.m | tee SafeDemo/ViewController.m
+          #import "ViewController.h"
+          @implementation ViewController
+          - (void)viewDidLoad {
+            [super viewDidLoad];
+            self.view.backgroundColor = [UIColor whiteColor];
+            UILabel *label1 = [[UILabel alloc] initWithFrame:CGRectMake(20, 100, 340, 40)];
+            label1.textAlignment = NSTextAlignmentCenter;
+            label1.text = @"Rootless build verification demo";
+            [self.view addSubview:label1];
+            UILabel *label2 = [[UILabel alloc] initWithFrame:CGRectMake(20, 160, 340, 60)];
+            label2.textAlignment = NSTextAlignmentCenter;
+            label2.numberOfLines = 0;
+            label2.text = @"No decryption, hooks, process control or app extraction";
+            [self.view addSubview:label2];
+          }
+          @end
+
+          cat > SafeDemo/Info.plist | tee SafeDemo/Info.plist
+          ?xml version="1.0" encoding="UTF-8"?>
+          !DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          ?xml version="1.0" encoding="UTF-8"?>
+          !DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          plist version="1.0">
+          dict>
+            key>CFBundleNamekey>
+            string>TrollDecryptAuditDemostring>
+            key>CFBundleIdentifierkey>
+            string>com.jygg77.trolldecrypt-audit-demostring>
+            key>CFBundleVersionkey>
+            string>0.1.0string>
+            key>CFBundleShortVersionStringkey>
+            string>0.1.0string>
+            key>UIDeviceFamilykey>
+            array>
+              integer>1integer>
+            array>
+            key>UILaunchScreenkey>
+            dict/>
+            key>CFBundleExecutablekey>
+            string>TrollDecryptAuditDemostring>
+            key>CFBundleInfoDictionaryVersionkey>
+            string>6.0string>
+            key>CFBundlePackageTypekey>
+            string>APPLstring>
+            key>UIApplicationSceneManifestkey>
+            dict>
+              key>UIApplicationSupportsMultipleSceneskey>
+              false/>
+            dict>
+            key>UISupportedInterfaceOrientationskey>
+            array>
+              string>UIInterfaceOrientationPortraitstring>
+            array>
+            key>LSRequiresIPhoneOSkey>
+            false/>
+          dict>
+          /plist>
+
+          cat > SafeDemo/control | tee SafeDemo/control
+          package: com.jygg77.trolldecrypt-audit-demo
+          name: TrollDecryptAuditDemo
+          section: rootless
+          version: 0.1.0
+          architecture: iphoneos-arm64
+          depends:
+          description: Rootless build verification demo
+
+          EOF
+
+      - name: Build with Theos
+        run: |
+          export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          cd SafeDemo
+          make clean package FINALPACKAGE=1
+
+      - name: Verify DEB package
+        run: |
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          cd SafeDemo
+          DEB=$(ls -t *.deb | head -1)
+          echo "=== DEB Info ==="
+          dpkg-deb -I "$DEB"
+          echo "=== DEB Contents ==="
+          dpkg-deb -c "$DEB"
+          echo "=== Extract and verify path ==="
+          mkdir -p /tmp/deb-extract
+          dpkg-deb -x "$DEB" /tmp/deb-extract
+          ls -laR /tmp/deb-extract/
+          if [ -d "/tmp/deb-extract/var/jb/Applications/TrollDecryptAuditDemo.app" ]; then
+            echo "PASS: /var/jb/Applications/TrollDecryptAuditDemo.app found in DEB"
+          else
+            echo "WARN: checking extracted paths..."
+            find /tmp/deb-extract -name "*.app" 2>/dev/null
+          fi
+          echo "=== Architecture check ==="
+          APP="/tmp/deb-extract/var/jb/Applications/TrollDecryptAuditDemo.app/TrollDecryptAuditDemo"
+          if [ -f "$APP" ]; then
+            lipo -info "$APP"
+          fi
+          echo "=== Forbidden content check ==="
+          DEB_CONTENTS=$(dpkg-deb -c "$DEB")
+          FORBIDDEN_PATTERN="(dylib|\.so|daemon|tool|flexdecrypt|dlopentool|TDDumpDecrypted|TweakHook|appstoretrollerKiller)"
+          if echo "$DEB_CONTENTS" | grep -qiE "$FORBIDDEN_PATTERN"; then
+            echo "FAIL: Forbidden content found in DEB"
+            echo "$DEB_CONTENTS" | grep -iE "$FORBIDDEN_PATTERN"
+            exit 1
+          else
+            echo "PASS: No forbidden content found"
+          fi
+          echo "=== Evidence ==="
+          {
+            echo "=== DEB Info ==="
+            dpkg-deb -I "$DEB"
+            echo ""
+            echo "=== DEB Contents ==="
+            dpkg-deb -c "$DEB"
+            echo ""
+            echo "=== Extract tree ==="
+            find /tmp/deb-extract -type f | sort
+            echo ""
+            echo "=== lipo info ==="
+            if [ -f "$APP" ]; then lipo -info "$APP"; else echo "No executable found"; fi
+            echo ""
+            echo "=== Forbidden check ==="
+            echo "PASS: No forbidden content found"
+          } > "$GITHUB_WORKSPACE/evidence.txt"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: |
+            SafeDemo/*.deb
+          retention-days: 5
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence
+          path: evidence.txt
+          retention-days: 5
