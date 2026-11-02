@@ -60,7 +60,6 @@ jobs:
           echo "Independent SafeDemo project validated."
 
       - name: Build rootless DEB
-        id: build
         working-directory: SafeDemo
         run: |
           set -euo pipefail
@@ -82,7 +81,7 @@ jobs:
         working-directory: SafeDemo
         run: |
           set -Eeuo pipefail
-          trap 'rc=$?; printf "::error::VERIFY_FAILURE line=%s command=%s exit=%s\n" "$LINENO" "$BASH_COMMAND" "$rc"; exit "$rc"' ERR
+          trap 'rc=$?; echo "::error::VERIFY_FAILURE line=$LINENO command=$BASH_COMMAND exit=$rc"; exit "$rc"' ERR
           export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
           mkdir -p "$GITHUB_WORKSPACE/build-evidence"
 
@@ -124,36 +123,21 @@ jobs:
             exit 1
           fi
 
-          echo "CHECKPOINT 6A: verify application executable exists"
+          echo "CHECKPOINT 6: verify executable and Info.plist"
           BIN="$APP/TrollDecryptAuditDemo"
-          if [ ! -s "$BIN" ]; then
-            echo "::error::Application executable missing or empty: $BIN"
-            find "$APP" -maxdepth 3 -print
-            exit 1
-          fi
-          ls -l "$BIN"
-
-          echo "CHECKPOINT 6B: verify application Info.plist exists and parses"
-          if [ ! -s "$APP/Info.plist" ]; then
-            echo "::error::Application Info.plist missing or empty: $APP/Info.plist"
-            find "$APP" -maxdepth 3 -print
-            exit 1
-          fi
+          test -s "$BIN"
+          test -s "$APP/Info.plist"
           plutil -lint "$APP/Info.plist"
-
-          echo "CHECKPOINT 6C: read bundle identifier and version using plistlib"
-          BUNDLE_ID="$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb"))["CFBundleIdentifier"])' "$APP/Info.plist")"
-          BUNDLE_VERSION="$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb"))["CFBundleShortVersionString"])' "$APP/Info.plist")"
-          echo "BUNDLE_ID=$BUNDLE_ID"
-          echo "BUNDLE_VERSION=$BUNDLE_VERSION"
-          if [ "$BUNDLE_ID" != "com.jygg77.trolldecrypt-audit-demo" ]; then
-            echo "::error::Unexpected CFBundleIdentifier: $BUNDLE_ID"
-            exit 1
-          fi
-          if [ "$BUNDLE_VERSION" != "0.1.0" ]; then
-            echo "::error::Unexpected CFBundleShortVersionString: $BUNDLE_VERSION"
-            exit 1
-          fi
+          python3 - "$APP/Info.plist" &lt;&lt;'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as stream:
+              info = plistlib.load(stream)
+          assert info.get("CFBundleIdentifier") == "com.jygg77.trolldecrypt-audit-demo", info
+          assert info.get("CFBundleShortVersionString") == "0.1.0", info
+          assert info.get("CFBundleExecutable") == "TrollDecryptAuditDemo", info
+          print("BUNDLE_ID=" + info["CFBundleIdentifier"])
+          print("BUNDLE_VERSION=" + info["CFBundleShortVersionString"])
+          PY
 
           echo "CHECKPOINT 7: verify executable architecture"
           lipo -info "$BIN" | tee "$GITHUB_WORKSPACE/build-evidence/binary-architecture.txt"
@@ -184,8 +168,8 @@ jobs:
             echo "PACKAGE_VERSION=$PACKAGE_VERSION"
             echo "BINARY_ARCHS=$ARCHS_FOUND"
             echo "APP_PATH=/var/jb/Applications/TrollDecryptAuditDemo.app"
-            echo "BUNDLE_ID=$BUNDLE_ID"
-            echo "BUNDLE_VERSION=$BUNDLE_VERSION"
+            echo "BUNDLE_ID=com.jygg77.trolldecrypt-audit-demo"
+            echo "BUNDLE_VERSION=0.1.0"
             echo "CHECKS=DEB metadata; archive entries; rootless install path; Info.plist; arm64 executable; excluded payload and marker scans"
           } | tee "$GITHUB_WORKSPACE/build-evidence/evidence.txt"
 
