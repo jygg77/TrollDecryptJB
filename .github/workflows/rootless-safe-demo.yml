@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - fix/rootless-ci-no-heredoc
 
 permissions:
   contents: read
@@ -18,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Theos and build dependencies
+      - name: Install Theos and dependencies
         run: |
           set -euo pipefail
           brew install ldid make fakeroot dpkg
@@ -43,164 +44,20 @@ jobs:
           echo "THEOS_ROOT=$THEOS"
           find "$THEOS/sdks" -maxdepth 1 -type d -name '*.sdk' -print
 
-      - name: Create independent SafeDemo project
+      - name: Generate and validate independent SafeDemo project
         run: |
           set -euo pipefail
-          mkdir -p SafeDemo
-          cat > SafeDemo/Makefile && 'MAKEFILE'
-          TARGET = iphone:clang:latest:15.0
-          ARCHS = arm64
-          THEOS_PACKAGE_SCHEME = rootless
-
-          include $(THEOS)/makefiles/common.mk
-
-          APPLICATION_NAME = TrollDecryptAuditDemo
-          TrollDecryptAuditDemo_FILES = main.m AppDelegate.m ViewController.m
-          TrollDecryptAuditDemo_FRAMEWORKS = UIKit
-          TrollDecryptAuditDemo_CFLAGS = -fobjc-arc
-          TrollDecryptAuditDemo_INSTALL_PATH = /Applications
-
-          include $(THEOS_MAKE_PATH)/application.mk
-          MAKEFILE
-
-          cat > SafeDemo/control && 'CONTROL'
-          Package: com.jygg77.trolldecrypt-audit-demo
-          Name: TrollDecryptAuditDemo
-          Version: 0.1.0
-          Architecture: iphoneos-arm64
-          Description: Independent UIKit build-verification demo. Contains no decryption, hooks, process control, or app extraction.
-          Maintainer: jygg77
-          Author: jygg77
-          Section: Applications
-          Priority: optional
-          CONTROL
-
-          cat > SafeDemo/Info.plist && 'PLIST'
-          &lt;?xml version="1.0" encoding="UTF-8"?&gt;
-          &lt;!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"&gt;
-          &lt;plist version="1.0"&gt;
-          &lt;dict&gt;
-            &lt;key&gt;CFBundleDevelopmentRegion&lt;/key&gt;
-            &lt;string&gt;en&lt;/string&gt;
-            &lt;key&gt;CFBundleExecutable&lt;/key&gt;
-            &lt;string&gt;TrollDecryptAuditDemo&lt;/string&gt;
-            &lt;key&gt;CFBundleIdentifier&lt;/key&gt;
-            &lt;string&gt;com.jygg77.trolldecrypt-audit-demo&lt;/string&gt;
-            &lt;key&gt;CFBundleInfoDictionaryVersion&lt;/key&gt;
-            &lt;string&gt;6.0&lt;/string&gt;
-            &lt;key&gt;CFBundleName&lt;/key&gt;
-            &lt;string&gt;TrollDecryptAuditDemo&lt;/string&gt;
-            &lt;key&gt;CFBundleDisplayName&lt;/key&gt;
-            &lt;string&gt;Audit Demo&lt;/string&gt;
-            &lt;key&gt;CFBundlePackageType&lt;/key&gt;
-            &lt;string&gt;APPL&lt;/string&gt;
-            &lt;key&gt;CFBundleShortVersionString&lt;/key&gt;
-            &lt;string&gt;0.1.0&lt;/string&gt;
-            &lt;key&gt;CFBundleVersion&lt;/key&gt;
-            &lt;string&gt;1&lt;/string&gt;
-            &lt;key&gt;LSRequiresIPhoneOS&lt;/key&gt;
-            &lt;true/&gt;
-            &lt;key&gt;MinimumOSVersion&lt;/key&gt;
-            &lt;string&gt;15.0&lt;/string&gt;
-            &lt;key&gt;UIRequiredDeviceCapabilities&lt;/key&gt;
-            &lt;array&gt;
-              &lt;string&gt;arm64&lt;/string&gt;
-            &lt;/array&gt;
-            &lt;key&gt;UISupportedInterfaceOrientations&lt;/key&gt;
-            &lt;array&gt;
-              &lt;string&gt;UIInterfaceOrientationPortrait&lt;/string&gt;
-            &lt;/array&gt;
-          &lt;/dict&gt;
-          &lt;/plist&gt;
-          PLIST
-
-          cat > SafeDemo/main.m && 'SOURCE'
-          #import &lt;UIKit/UIKit.h&gt;
-          #import "AppDelegate.h"
-
-          int main(int argc, char * argv[]) {
-              @autoreleasepool {
-                  return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
-              }
-          }
-          SOURCE
-
-          cat > SafeDemo/AppDelegate.h && 'SOURCE'
-          #import &lt;UIKit/UIKit.h&gt;
-
-          @interface AppDelegate : UIResponder &lt;UIApplicationDelegate&gt;
-          @property (strong, nonatomic) UIWindow *window;
-          @end
-          SOURCE
-
-          cat > SafeDemo/AppDelegate.m && 'SOURCE'
-          #import "AppDelegate.h"
-          #import "ViewController.h"
-
-          @implementation AppDelegate
-
-          - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-              self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-              self.window.rootViewController = [ViewController new];
-              [self.window makeKeyAndVisible];
-              return YES;
-          }
-
-          @end
-          SOURCE
-
-          cat > SafeDemo/ViewController.h && 'SOURCE'
-          #import &lt;UIKit/UIKit.h&gt;
-
-          @interface ViewController : UIViewController
-          @end
-          SOURCE
-
-          cat > SafeDemo/ViewController.m && 'SOURCE'
-          #import "ViewController.h"
-
-          @implementation ViewController
-
-          - (void)viewDidLoad {
-              [super viewDidLoad];
-              self.view.backgroundColor = UIColor.systemBackgroundColor;
-
-              UILabel *title = [UILabel new];
-              title.translatesAutoresizingMaskIntoConstraints = NO;
-              title.text = @"Rootless build verification demo";
-              title.font = [UIFont systemFontOfSize:24 weight:UIFontWeightBold];
-              title.textColor = UIColor.labelColor;
-              title.textAlignment = NSTextAlignmentCenter;
-              title.numberOfLines = 0;
-
-              UILabel *details = [UILabel new];
-              details.translatesAutoresizingMaskIntoConstraints = NO;
-              details.text = @"No decryption, hooks, process control or app extraction.";
-              details.font = [UIFont systemFontOfSize:16 weight:UIFontWeightRegular];
-              details.textColor = UIColor.secondaryLabelColor;
-              details.textAlignment = NSTextAlignmentCenter;
-              details.numberOfLines = 0;
-
-              [self.view addSubview:title];
-              [self.view addSubview:details];
-
-              [NSLayoutConstraint activateConstraints:@[
-                  [title.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:24],
-                  [title.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-24],
-                  [title.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor constant:-32],
-                  [details.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:20],
-                  [details.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
-                  [details.trailingAnchor constraintEqualToAnchor:title.trailingAnchor]
-              ]];
-          }
-
-          @end
-          SOURCE
-
+          python3 -m py_compile scripts/create_safedemo.py
+          python3 scripts/create_safedemo.py
+          test -f SafeDemo/Makefile
+          test -f SafeDemo/control
+          test -f SafeDemo/Info.plist
+          test -f SafeDemo/ViewController.m
           plutil -lint SafeDemo/Info.plist
           grep -q '^TARGET = iphone:clang:latest:15.0$' SafeDemo/Makefile
           grep -q '^THEOS_PACKAGE_SCHEME = rootless$' SafeDemo/Makefile
-          echo "SafeDemo sources and metadata created."
+          grep -q '^ARCHS = arm64$' SafeDemo/Makefile
+          echo "Independent SafeDemo project validated."
 
       - name: Build rootless DEB
         working-directory: SafeDemo
@@ -216,6 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
+          mkdir -p "$GITHUB_WORKSPACE/build-evidence"
           DEB="$(find packages -maxdepth 1 -type f -name '*.deb' -print -quit)"
           if [ -z "$DEB" ]; then
             echo "No DEB package was produced." >&2
@@ -223,6 +81,7 @@ jobs:
           fi
 
           EXTRACT="$RUNNER_TEMP/safedemo-deb"
+          rm -rf "$EXTRACT"
           mkdir -p "$EXTRACT"
           dpkg-deb --info "$DEB" | tee "$GITHUB_WORKSPACE/build-evidence/deb-info.txt"
           dpkg-deb --extract "$DEB" "$EXTRACT"
@@ -230,7 +89,7 @@ jobs:
           APP="$EXTRACT/var/jb/Applications/TrollDecryptAuditDemo.app"
           if [ ! -d "$APP" ]; then
             echo "Expected rootless app path is missing: $APP" >&2
-            find "$EXTRACT" -maxdepth 6 -print >&2
+            find "$EXTRACT" -maxdepth 7 -print >&2
             exit 1
           fi
 
@@ -272,7 +131,7 @@ jobs:
 
           cp "$DEB" "$GITHUB_WORKSPACE/build-evidence/"
 
-      - name: Upload verified package and evidence
+      - name: Upload package and verification evidence
         uses: actions/upload-artifact@v4
         with:
           name: TrollDecryptAuditDemo-rootless
