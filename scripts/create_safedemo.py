@@ -16,7 +16,8 @@ include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = TrollDecryptAuditDemo
 TrollDecryptAuditDemo_FILES = main.m AppDelegate.m ViewController.m
-TrollDecryptAuditDemo_FRAMEWORKS = UIKit TrollDecryptAuditDemo_RESOURCE_FILES = Info.plist
+TrollDecryptAuditDemo_FRAMEWORKS = UIKit
+TrollDecryptAuditDemo_RESOURCE_FILES = Info.plist
 TrollDecryptAuditDemo_CFLAGS = -fobjc-arc
 TrollDecryptAuditDemo_INSTALL_PATH = /Applications
 
