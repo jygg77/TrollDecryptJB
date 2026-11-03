@@ -69,8 +69,8 @@ jobs:
           cp "$RUNNER_TEMP/safedemo-build.log" "$GITHUB_WORKSPACE/build-evidence/build.log"
           DEB="$(find packages -maxdepth 1 -type f -name '*_iphoneos-arm64.deb' -print -quit)"
           if [ -z "$DEB" ]; then
-            echo "No iphoneos-arm64 DEB found after build." >&2
-            find packages -maxdepth 2 -type f -print >&2 || true
+            echo "No iphoneos-arm64 DEB found after build."
+            find packages -maxdepth 2 -type f -print
             exit 1
           fi
           cp "$DEB" "$GITHUB_WORKSPACE/build-evidence/"
@@ -89,7 +89,7 @@ jobs:
           DEB="$(find packages -maxdepth 1 -type f -name '*_iphoneos-arm64.deb' -print -quit)"
           if [ -z "$DEB" ]; then
             echo "::error::No iphoneos-arm64 package found in SafeDemo/packages"
-            find packages -maxdepth 3 -print >&2 || true
+            find packages -maxdepth 3 -print
             exit 1
           fi
           echo "PACKAGE_PATH=$DEB"
@@ -128,16 +128,7 @@ jobs:
           test -s "$BIN"
           test -s "$APP/Info.plist"
           plutil -lint "$APP/Info.plist"
-          python3 - "$APP/Info.plist" &lt;&lt;'PY'
-          import plistlib, sys
-          with open(sys.argv[1], "rb") as stream:
-              info = plistlib.load(stream)
-          assert info.get("CFBundleIdentifier") == "com.jygg77.trolldecrypt-audit-demo", info
-          assert info.get("CFBundleShortVersionString") == "0.1.0", info
-          assert info.get("CFBundleExecutable") == "TrollDecryptAuditDemo", info
-          print("BUNDLE_ID=" + info["CFBundleIdentifier"])
-          print("BUNDLE_VERSION=" + info["CFBundleShortVersionString"])
-          PY
+          python3 -c 'import plistlib,sys; info=plistlib.load(open(sys.argv[1], "rb")); assert info.get("CFBundleIdentifier") == "com.jygg77.trolldecrypt-audit-demo", info; assert info.get("CFBundleShortVersionString") == "0.1.0", info; assert info.get("CFBundleExecutable") == "TrollDecryptAuditDemo", info; print("BUNDLE_ID=" + info["CFBundleIdentifier"]); print("BUNDLE_VERSION=" + info["CFBundleShortVersionString"])' "$APP/Info.plist"
 
           echo "CHECKPOINT 7: verify executable architecture"
           lipo -info "$BIN" | tee "$GITHUB_WORKSPACE/build-evidence/binary-architecture.txt"
