@@ -132,7 +132,7 @@ jobs:
 
           echo "CHECKPOINT 7: verify executable architecture"
           lipo -info "$BIN" | tee "$GITHUB_WORKSPACE/build-evidence/binary-architecture.txt"
-          lipo -verify_arch arm64 "$BIN"
+          lipo "$BIN" -verify_arch arm64
           ARCHS_FOUND="$(lipo -archs "$BIN")"
           echo "BINARY_ARCHS=$ARCHS_FOUND"
 
